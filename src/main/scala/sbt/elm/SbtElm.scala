@@ -122,7 +122,7 @@ object SbtElm extends AutoPlugin {
     sources in elmMake := ((sourceDirectories in elmMake).value **
       ((includeFilter in elmMake).value -- (excludeFilter in elmMake).value)).get,
     elmMake := {
-      val srcs = (sources in elmMake).value
+      val srcs     = (sources in elmMake).value
       val cacheDir = streams.value.cacheDirectory
 
       streams.value.log.info(s"SOURCES: $srcs")
@@ -131,11 +131,11 @@ object SbtElm extends AutoPlugin {
       val hash = OpInputHash.hashString(
         (((elmExecutable in elmMake).value +: (elmOptions in elmMake).value)
           ++ srcs :+ (elmOutput in elmMake).value).mkString("\u0000")
-        )
+      )
 
-        implicit val opInputHasher = OpInputHasher[Unit](_ => hash)
+      implicit val opInputHasher = OpInputHasher[Unit](_ => hash)
 
-        val (outs, ()) = syncIncremental(cacheDir / "run", Seq.empty[Unit]) {
+      val (outs, ()) = syncIncremental(cacheDir / "run", Seq.empty[Unit]) {
         case Seq() => (Map.empty, ())
         case _ =>
           streams.value.log.info(s"Elm compiling on ${srcs.length} source(s)")
@@ -145,9 +145,9 @@ object SbtElm extends AutoPlugin {
 
           val problems = {
             val (buffer, processLogger) = ownLogger
-            val commands = command.mkString(" ")
+            val commands                = command.mkString(" ")
             streams.value.log.info(s"COMMAND laucnhed: $commands")
-            val exitStatus              = Process(commands, baseDirectory.value).run(processLogger).exitValue()
+            val exitStatus = Process(commands, baseDirectory.value).run(processLogger).exitValue()
             if (exitStatus != 0) ProcessOutputParser.readProblems(buffer mkString "\n", srcs).get
             else Nil
           }
