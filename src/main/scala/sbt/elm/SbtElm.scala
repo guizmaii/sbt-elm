@@ -122,14 +122,7 @@ object SbtElm extends AutoPlugin {
     elmMake := {
       val srcs = (sources in elmMake).value
 
-      val hash = OpInputHash.hashString(
-        (((elmExecutable in elmMake).value +: (elmOptions in elmMake).value)
-          ++ srcs :+ (elmOutput in elmMake).value).mkString("\u0000")
-      )
-
-      implicit val opInputHasher = OpInputHasher[Unit](_ => hash)
-
-      val (outs, ()) = syncIncremental(streams.value.cacheDirectory / "run", Seq(())) {
+      val (outs, ()) = syncIncremental(streams.value.cacheDirectory / "run", Seq.empty[Unit]) {
         case Seq() => (Map.empty, ())
         case _ =>
           streams.value.log.info(s"Elm compiling on ${srcs.length} source(s)")
@@ -137,7 +130,7 @@ object SbtElm extends AutoPlugin {
           val command = ((elmExecutable in elmMake).value +: (elmOptions in elmMake).value) ++
             ("--output" :: (elmOutput in elmMake).value.absolutePath :: srcs.getPaths.toList)
 
-          val problems = doCompile(command, srcs)
+          val problems = doCompile(command, srcs, baseDirectory.value)
           CompileProblems.report((reporter in elmMake).value, problems)
 
           (Map(
@@ -162,7 +155,7 @@ object SbtElm extends AutoPlugin {
         s"running [$command ${args.mkString("")}] (output might be missing/delayed, check http://localhost:8000)"
       )
       log.info("press enter to stop...")
-      val process = Process(command, args).run(log)
+      val process = Process(command +: args, baseDirectory.value).run(log)
       val _       = StdIn.readLine()
       process.destroy()
       val exitValue = process.exitValue()
@@ -177,7 +170,7 @@ object SbtElm extends AutoPlugin {
       val log     = streams.value.log
       val command = (elmExecutable in elmRepl).value
       val args    = Seq("repl") ++ (elmOptions in elmRepl).value
-      Process(command, args).run(log, connectInput = true).exitValue()
+      Process(command +: args, baseDirectory.value).run(log, connectInput = true).exitValue()
     },
     resourceGenerators += elmMake.taskValue
   )
@@ -199,9 +192,9 @@ object SbtElm extends AutoPlugin {
         elmRepl := (elmRepl in Assets).value
       )
 
-  def doCompile(command: Seq[String], sourceFiles: Seq[File]): Seq[Problem] = {
+  def doCompile(command: Seq[String], sourceFiles: Seq[File], baseDirectory: File): Seq[Problem] = {
     val (buffer, pscLogger) = logger
-    val exitStatus          = command.mkString(" ") ! pscLogger
+    val exitStatus          = Process(command.mkString(" "), baseDirectory) ! pscLogger
     if (exitStatus != 0) PscOutputParser.readProblems(buffer mkString "\n", sourceFiles).get
     else Nil
   }
