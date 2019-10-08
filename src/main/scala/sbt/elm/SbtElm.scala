@@ -1,16 +1,16 @@
 package sbt.elm
 
 import com.typesafe.sbt.web.incremental._
-import com.typesafe.sbt.web.{CompileProblems, LineBasedProblem, SbtWeb}
+import com.typesafe.sbt.web.{ CompileProblems, LineBasedProblem, SbtWeb }
 import sbt.Keys._
 import sbt._
-import xsbti.{Problem, Severity}
+import xsbti.{ Problem, Severity }
 
 import scala.collection.mutable.ArrayBuffer
 import scala.io.StdIn
 import scala.sys.process.Process
 import scala.sys.process.ProcessLogger
-import scala.util.{Failure, Success, Try}
+import scala.util.{ Failure, Success, Try }
 import scala.sys.process._
 
 object SbtElm extends AutoPlugin {
@@ -73,7 +73,8 @@ object SbtElm extends AutoPlugin {
             --port=<port>
                 The port of the server (default: 8000)
        */
-      val elmReactor = TaskKey[Unit]("elm-reactor", "Develop with compile-on-refresh and time-travel debugging for Elm.")
+      val elmReactor =
+        TaskKey[Unit]("elm-reactor", "Develop with compile-on-refresh and time-travel debugging for Elm.")
 
       /*
         The `repl` command opens up an interactive programming session:
@@ -98,8 +99,8 @@ object SbtElm extends AutoPlugin {
       val elmRepl = TaskKey[Unit]("elm-repl", "Elm REPL for running individual expressions.")
 
       val elmExecutable = settingKey[String]("The Elm executable.")
-      val elmOutput = settingKey[File]("Elm output file.")
-      val elmOptions = settingKey[Seq[String]]("Elm executable options.")
+      val elmOutput     = settingKey[File]("Elm output file.")
+      val elmOptions    = settingKey[Seq[String]]("Elm executable options.")
     }
 
   }
@@ -125,7 +126,8 @@ object SbtElm extends AutoPlugin {
 
       val hash = OpInputHash.hashString(
         (((elmExecutable in elmMake).value +: (elmOptions in elmMake).value)
-          ++ srcs :+ (elmOutput in elmMake).value).mkString("\u0000"))
+          ++ srcs :+ (elmOutput in elmMake).value).mkString("\u0000")
+      )
 
       implicit val opInputHasher = OpInputHasher[Unit](_ => hash)
 
@@ -140,44 +142,47 @@ object SbtElm extends AutoPlugin {
           val problems = doCompile(command, srcs)
           CompileProblems.report((reporter in elmMake).value, problems)
 
-          (Map(() ->
-            (if (problems.nonEmpty) OpFailure
-            else OpSuccess(srcs.toSet, Set((elmOutput in elmMake).value)))), ())
+          (Map(
+             () ->
+               (if (problems.nonEmpty) OpFailure
+                else OpSuccess(srcs.toSet, Set((elmOutput in elmMake).value)))
+           ),
+           ())
       }
 
       outs.toSeq
     },
-
     // Elm Reactor
     elmExecutable in elmReactor := "elm",
     elmOptions in elmReactor := Nil,
     elmReactor := {
-      val log = streams.value.log
+      val log     = streams.value.log
       val command = (elmExecutable in elmReactor).value
-      val args = Seq("reactor") ++ (elmOptions in elmReactor).value
+      val args    = Seq("reactor") ++ (elmOptions in elmReactor).value
       // not sure why output is not shown
-      log.info(s"running [$command ${args.mkString("")}] (output might be missing/delayed, check http://localhost:8000)")
+      log.info(
+        s"running [$command ${args.mkString("")}] (output might be missing/delayed, check http://localhost:8000)"
+      )
       log.info("press enter to stop...")
       val process = Process(command, args).run(log)
-      val _ = StdIn.readLine()
+      val _       = StdIn.readLine()
       process.destroy()
       val exitValue = process.exitValue()
-      if(exitValue != 0 && exitValue != 143){
+      if (exitValue != 0 && exitValue != 143) {
         log.error(s"process exited with $exitValue")
       }
     },
-
     // Elm REPL
     elmExecutable in elmRepl := "elm",
     elmOptions in elmRepl := Nil,
     elmRepl := {
-      val log = streams.value.log
+      val log     = streams.value.log
       val command = (elmExecutable in elmRepl).value
-      val args = Seq("repl") ++ (elmOptions in elmRepl).value
+      val args    = Seq("repl") ++ (elmOptions in elmRepl).value
       Process(command, args).run(log, connectInput = true).exitValue()
     },
-
-    resourceGenerators += elmMake.taskValue)
+    resourceGenerators += elmMake.taskValue
+  )
 
   override def projectSettings =
     inConfig(Assets)(
@@ -185,20 +190,20 @@ object SbtElm extends AutoPlugin {
         resourceManaged in elmMake := webTarget.value / "elm" / "main"
       )
     ) ++
-    // FIXME include elm-test in test command
-    /* inConfig(TestAssets)(
+      // FIXME include elm-test in test command
+      /* inConfig(TestAssets)(
       baseElmSettings ++ Seq(
         resourceManaged in elmMake := webTarget.value / "elm" / "test"
       )
     ) ++ */ Seq(
-      elmMake := (elmMake in Assets).value,
-      elmReactor := (elmReactor in Assets).value,
-      elmRepl := (elmRepl in Assets).value
-    )
+        elmMake := (elmMake in Assets).value,
+        elmReactor := (elmReactor in Assets).value,
+        elmRepl := (elmRepl in Assets).value
+      )
 
   def doCompile(command: Seq[String], sourceFiles: Seq[File]): Seq[Problem] = {
     val (buffer, pscLogger) = logger
-    val exitStatus = command.mkString(" ") ! pscLogger
+    val exitStatus          = command.mkString(" ") ! pscLogger
     if (exitStatus != 0) PscOutputParser.readProblems(buffer mkString "\n", sourceFiles).get
     else Nil
   }
@@ -216,7 +221,7 @@ object SbtElm extends AutoPlugin {
   }
 
   object PscOutputParser {
-    val TypeError = """(?s)Error at (.*) line ([0-9]+), column ([0-9]+):\s*\n(.*)""".r
+    val TypeError  = """(?s)Error at (.*) line ([0-9]+), column ([0-9]+):\s*\n(.*)""".r
     val ParseError = """(?s)"([^"]+)" \(line ([0-9]+), column ([0-9]+)\):\s*\n(.*)""".r
 
     def readProblems(pscOutput: String, sourceFiles: Seq[File]): Try[Seq[Problem]] = pscOutput match {
@@ -229,10 +234,15 @@ object SbtElm extends AutoPlugin {
     }
 
     def problem(filePath: String, lineString: String, columnString: String, message: String) = {
-      val file = new File(filePath)
-      val line = lineString.toInt
+      val file   = new File(filePath)
+      val line   = lineString.toInt
       val column = columnString.toInt - 1
-      new LineBasedProblem(message, Severity.Error, line, column, IO.readLines(file).drop(line - 1).headOption.getOrElse(""), file)
+      new LineBasedProblem(message,
+                           Severity.Error,
+                           line,
+                           column,
+                           IO.readLines(file).drop(line - 1).headOption.getOrElse(""),
+                           file)
     }
   }
 
