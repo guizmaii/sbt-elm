@@ -135,7 +135,7 @@ object SbtElm extends AutoPlugin {
 
       implicit val opInputHasher = OpInputHasher[Unit](_ => hash)
 
-      val (outs, ()) = syncIncremental(cacheDir / "run", Seq.empty[Unit]) {
+      val (outs, ()) = syncIncremental(cacheDir / "run", Seq(())) {
         case Seq() => (Map.empty, ())
         case _ =>
           streams.value.log.info(s"Elm compiling on ${srcs.length} source(s)")
