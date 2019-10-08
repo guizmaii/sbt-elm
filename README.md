@@ -22,7 +22,7 @@ To use the latest from Github, add the following to the `project/plugins.sbt` of
 
 ```scala
 lazy val root = project.in(file(".")).dependsOn(sbtElm)
-lazy val sbtElm = uri("https://github.com/choucrifahed/sbt-elm.git")
+lazy val sbtElm = RootProject(uri("https://github.com/choucrifahed/sbt-elm.git"))
 ```    
 
 Then:
