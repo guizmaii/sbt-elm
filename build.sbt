@@ -5,7 +5,6 @@ sbtPlugin := true
 scalaVersion := "2.12.10"
 
 addSbtPlugin("com.typesafe.sbt" % "sbt-web" % "1.4.4")
-enablePlugins(SbtPlugin)
 
 licenses += ("MIT", url("http://opensource.org/licenses/MIT"))
 bintrayOrganization := Some("guizmaii")
