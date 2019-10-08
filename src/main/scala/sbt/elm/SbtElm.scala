@@ -116,7 +116,7 @@ object SbtElm extends AutoPlugin {
     // Elm Make
     elmExecutable in elmMake := "elm make",
     elmOptions in elmMake := Seq(),
-    elmOutput in elmMake := (resourceManaged in elmMake).value / "js" / "elmMain.js",
+    elmOutput in elmMake := (resourceManaged in elmMake).value / "js" / "index.html",
     includeFilter in elmMake := "*.elm",
     sourceDirectories in elmMake := Seq(baseDirectory.value / "src"),
     sources in elmMake := ((sourceDirectories in elmMake).value **
