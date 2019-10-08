@@ -107,8 +107,6 @@ object SbtElm extends AutoPlugin {
 
   override def requires = SbtWeb
 
-  override def trigger = AllRequirements
-
   import SbtWeb.autoImport._
   import WebKeys._
   import autoImport.ElmKeys._
