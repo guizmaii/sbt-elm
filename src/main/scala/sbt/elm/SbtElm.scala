@@ -12,6 +12,7 @@ import scala.sys.process.Process
 import scala.sys.process.ProcessLogger
 import scala.util.{ Failure, Success, Try }
 import scala.sys.process._
+import scala.util.matching.Regex
 
 object SbtElm extends AutoPlugin {
 
@@ -117,12 +118,24 @@ object SbtElm extends AutoPlugin {
     elmOptions in elmMake := Seq(),
     elmOutput in elmMake := (resourceManaged in elmMake).value / "js" / "elmMain.js",
     includeFilter in elmMake := "*.elm",
+    sourceDirectories in elmMake := Seq(baseDirectory.value / "src"),
     sources in elmMake := ((sourceDirectories in elmMake).value **
       ((includeFilter in elmMake).value -- (excludeFilter in elmMake).value)).get,
     elmMake := {
       val srcs = (sources in elmMake).value
+      val cacheDir = streams.value.cacheDirectory
 
-      val (outs, ()) = syncIncremental(streams.value.cacheDirectory / "run", Seq.empty[Unit]) {
+      streams.value.log.info(s"SOURCES: $srcs")
+      streams.value.log.info(s"CACHE DIR: $cacheDir")
+
+      val hash = OpInputHash.hashString(
+        (((elmExecutable in elmMake).value +: (elmOptions in elmMake).value)
+          ++ srcs :+ (elmOutput in elmMake).value).mkString("\u0000")
+        )
+
+        implicit val opInputHasher = OpInputHasher[Unit](_ => hash)
+
+        val (outs, ()) = syncIncremental(cacheDir / "run", Seq.empty[Unit]) {
         case Seq() => (Map.empty, ())
         case _ =>
           streams.value.log.info(s"Elm compiling on ${srcs.length} source(s)")
@@ -130,7 +143,14 @@ object SbtElm extends AutoPlugin {
           val command = ((elmExecutable in elmMake).value +: (elmOptions in elmMake).value) ++
             ("--output" :: (elmOutput in elmMake).value.absolutePath :: srcs.getPaths.toList)
 
-          val problems = doCompile(command, srcs, baseDirectory.value)
+          val problems = {
+            val (buffer, processLogger) = ownLogger
+            val commands = command.mkString(" ")
+            streams.value.log.info(s"COMMAND laucnhed: $commands")
+            val exitStatus              = Process(commands, baseDirectory.value).run(processLogger).exitValue()
+            if (exitStatus != 0) ProcessOutputParser.readProblems(buffer mkString "\n", srcs).get
+            else Nil
+          }
           CompileProblems.report((reporter in elmMake).value, problems)
 
           (Map(
@@ -192,14 +212,7 @@ object SbtElm extends AutoPlugin {
         elmRepl := (elmRepl in Assets).value
       )
 
-  def doCompile(command: Seq[String], sourceFiles: Seq[File], baseDirectory: File): Seq[Problem] = {
-    val (buffer, pscLogger) = logger
-    val exitStatus          = Process(command.mkString(" "), baseDirectory) ! pscLogger
-    if (exitStatus != 0) PscOutputParser.readProblems(buffer mkString "\n", sourceFiles).get
-    else Nil
-  }
-
-  def logger = {
+  def ownLogger = {
     val lineBuffer = new ArrayBuffer[String]
     val logger = new ProcessLogger {
       override def out(s: => String) = lineBuffer += s
@@ -211,29 +224,34 @@ object SbtElm extends AutoPlugin {
     (lineBuffer, logger)
   }
 
-  object PscOutputParser {
-    val TypeError  = """(?s)Error at (.*) line ([0-9]+), column ([0-9]+):\s*\n(.*)""".r
-    val ParseError = """(?s)"([^"]+)" \(line ([0-9]+), column ([0-9]+)\):\s*\n(.*)""".r
+  object ProcessOutputParser {
+    private final val TypeError: Regex  = """(?s)Error at (.*) line ([0-9]+), column ([0-9]+):\s*\n(.*)""".r
+    private final val ParseError: Regex = """(?s)"([^"]+)" \(line ([0-9]+), column ([0-9]+)\):\s*\n(.*)""".r
 
-    def readProblems(pscOutput: String, sourceFiles: Seq[File]): Try[Seq[Problem]] = pscOutput match {
-      case TypeError(filePath, lineString, columnString, message) =>
-        Success(Seq(problem(filePath, lineString, columnString, message)))
-      case ParseError(filePath, lineString, columnString, message) =>
-        Success(Seq(problem(filePath, lineString, columnString, message)))
-      case other =>
-        Failure(new RuntimeException(s"Failed to parse `elm` output. This is the original `elm` output:\n" + pscOutput))
-    }
+    def readProblems(processOutput: String, sourceFiles: Seq[File]): Try[Seq[Problem]] =
+      processOutput match {
+        case TypeError(filePath, lineString, columnString, message) =>
+          Success(Seq(problem(filePath, lineString, columnString, message)))
+        case ParseError(filePath, lineString, columnString, message) =>
+          Success(Seq(problem(filePath, lineString, columnString, message)))
+        case _ =>
+          Failure(
+            new RuntimeException(s"Failed to parse `elm` output. This is the original `elm` output:\n" + processOutput)
+          )
+      }
 
-    def problem(filePath: String, lineString: String, columnString: String, message: String) = {
+    private def problem(filePath: String, lineString: String, columnString: String, message: String) = {
       val file   = new File(filePath)
       val line   = lineString.toInt
       val column = columnString.toInt - 1
-      new LineBasedProblem(message,
-                           Severity.Error,
-                           line,
-                           column,
-                           IO.readLines(file).drop(line - 1).headOption.getOrElse(""),
-                           file)
+      new LineBasedProblem(
+        message,
+        Severity.Error,
+        line,
+        column,
+        IO.readLines(file).drop(line - 1).headOption.getOrElse(""),
+        file
+      )
     }
   }
 
